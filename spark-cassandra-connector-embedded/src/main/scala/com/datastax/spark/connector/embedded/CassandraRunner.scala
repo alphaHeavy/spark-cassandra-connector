@@ -1,6 +1,7 @@
 package com.datastax.spark.connector.embedded
 
 import java.net.InetAddress
+import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConversions._
 import scala.util.Try
@@ -73,10 +74,23 @@ private[connector] class CassandraRunner(val configTemplate: String, props: Map[
   if (!waitForPortOpen(InetAddress.getByName(props.get("rpc_address").get), nativePort, 100000))
     throw new IOException("Failed to start Cassandra.")
 
+  def printStackTraces: Unit = {
+    import scala.collection.JavaConverters._
+    val allStackTraces = Thread.getAllStackTraces.asScala
+    for ((thread, stackTrace) <- allStackTraces;
+         stackElement <- stackTrace) {
+      println(s"$thread   |   $stackElement")
+    }
+  }
+  
   def destroy() {
     System.err.println(s"========-------- Stopping Embedded Cassandra at ${props.get("native_transport_port").get} --------========")
     process.destroy()
-    process.waitFor()
+    if(!process.waitFor(3, TimeUnit.MINUTES)) {
+      printStackTraces
+      process.waitFor()
+    }
+    System.err.println(s"========+++++++++ Stopped Embedded Cassandra at ${props.get("native_transport_port").get} ++++++++========")
     FileUtils.forceDelete(tempDir)
     tempDir.delete()
   }
