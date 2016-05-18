@@ -8,7 +8,7 @@ import org.apache.commons.io.IOUtils
 import org.apache.spark.SparkConf
 
 import com.datastax.driver.core.policies.ExponentialReconnectionPolicy
-import com.datastax.driver.core.{JdkSSLOptions, Cluster, SSLOptions, SocketOptions}
+import com.datastax.driver.core._
 import com.datastax.spark.connector.cql.CassandraConnectorConf.CassandraSSLConf
 import com.datastax.spark.connector.util.{ConfigParameter, ReflectionUtil}
 
@@ -33,6 +33,12 @@ object DefaultConnectionFactory extends CassandraConnectionFactory {
       .setConnectTimeoutMillis(conf.connectTimeoutMillis)
       .setReadTimeoutMillis(conf.readTimeoutMillis)
 
+    val pooling = new PoolingOptions()
+      .setConnectionsPerHost(HostDistance.LOCAL,2,10)
+      .setConnectionsPerHost(HostDistance.REMOTE,2,10)
+      .setMaxRequestsPerConnection(HostDistance.LOCAL, 16536)
+      .setMaxConnectionsPerHost(HostDistance.REMOTE,2048)
+
     val builder = Cluster.builder()
       .addContactPoints(conf.hosts.toSeq: _*)
       .withPort(conf.port)
@@ -45,6 +51,7 @@ object DefaultConnectionFactory extends CassandraConnectionFactory {
       .withAuthProvider(conf.authConf.authProvider)
       .withSocketOptions(options)
       .withCompression(conf.compression)
+      .withPoolingOptions(pooling)
 
     if (conf.cassandraSSLConf.enabled) {
       maybeCreateSSLOptions(conf.cassandraSSLConf) match {
